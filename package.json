@@ -1,0 +1,30 @@
+{
+	"name": "vbb-get-off-bot",
+	"description": "A Telegram bot that helps you get off your train on time.",
+	"version": "0.1.0",
+	"main": "index.js",
+	"files": [
+		"index.js"
+	],
+	"keywords": [
+		"todo"
+	],
+	"author": "Jannis R <mail@jannisr.de>",
+	"homepage": "https://github.com/derhuerst/vbb-get-off-bot",
+	"repository": "derhuerst/vbb-get-off-bot",
+	"bugs": "https://github.com/derhuerst/vbb-get-off-bot/issues",
+	"license": "ISC",
+	"engines": {
+		"node": ">=6"
+	},
+	"dependencies": {
+	},
+	"devDependencies": {
+		"tape": "^4.6.3",
+		"tap-min": "^1.2.1"
+	},
+	"scripts": {
+		"test": "node test.js | tap-min",
+		"prepublishOnly": "npm test"
+	}
+}
