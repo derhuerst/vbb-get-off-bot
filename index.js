@@ -7,6 +7,8 @@ const hafas = require('vbb-hafas')
 const timezone = require('moment-timezone')
 const ms = require('ms')
 
+const watchers = require('./lib/watchers')
+
 const TOKEN = process.env.TOKEN
 if (!TOKEN) {
 	console.error('Missing TOKEN env var.')
@@ -24,6 +26,23 @@ for (let id in allStops) {
 	stationsOf[id] = id
 	for (let stop of allStops[id].stops)
 	stationsOf[stop.id] = id
+}
+
+const findArrival = (id, name, station, cb) => () => {
+	return hafas.journeyDetails(id, name)
+	.then((journey) => {
+		for (let stopover of journey.passed) {
+			if (stopover.station.id === station) return stopover.arrival
+		}
+		return null
+	})
+	.then((arrival) => {
+		const d = new Date(arrival) - Date.now()
+		if (d < 60 * 1000) cb(d) // todo: make use of delay information
+	})
+	.catch((err) => {
+		console.error(err)
+	})
 }
 
 const renderTime = (when) => timezone(when).tz(TIMEZONE).format('LT')
@@ -97,10 +116,16 @@ bot.on('message', (msg) => {
 		const journey = d.journeys[parseInt(text)]
 		if (!journey) return bot.sendMessage(user, 'Oops! No journey found. Try again!')
 
-		const id = journey.parts[0].id // todo: support more than one part
-		d.id = id
+		// todo: support more than one part
+		d.id = journey.parts[0].id
+		d.name = journey.parts[0].name // todo: support more than one part
 		d.state = 0
 
 		// todo: start watcher
+		const watcher = findArrival(d.id, d.name, d.to, (timeLeft) => {
+			if (timeLeft < 0) watchers.stop(user)
+			else bot.sendMessage(user, `You need to get off in ${ms(timeLeft)}.`)
+		})
+		watchers.start(user, watcher)
 	}
 })
