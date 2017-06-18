@@ -3,11 +3,19 @@
 const allStops = require('vbb-stations/full.json')
 const Bot = require('node-telegram-bot-api')
 const vbb = require('vbb-client')
-const lines = require('vbb-lines')
+const hafas = require('vbb-hafas')
+const timezone = require('moment-timezone')
+const ms = require('ms')
 
 const TOKEN = process.env.TOKEN
 if (!TOKEN) {
 	console.error('Missing TOKEN env var.')
+	process.exit(1)
+}
+
+const TIMEZONE = process.env.TIMEZONE
+if (!TIMEZONE) {
+	console.error('Missing TIMEZONE env var.')
 	process.exit(1)
 }
 
@@ -18,29 +26,15 @@ for (let id in allStops) {
 	stationsOf[stop.id] = id
 }
 
-const findVariants = (from, to) => {
-	const variants = []
+const renderTime = (when) => timezone(when).tz(TIMEZONE).format('LT')
 
-	return new Promise((yay, nay) => {
-		lines('all')
-		.once('error', yay)
-		.on('data', (line) => {
-			const variant = line.variants.find((v) => {
-				for (let i = 0; i < (v.length - 1); v++) {
-					const id = stationsOf[v[i]]
-					if (id !== from) continue
-
-					for (let j = i + 1; j < v.length; j++) {
-						const id2 = stationsOf[v[j]]
-						if (id2 === to) return true
-					}
-				}
-				return false
-			})
-			if (variant) variants.push([variant, line])
-		})
-		.on('end', () => yay(variants))
-	})
+const renderJourney = (j) => {
+	const dep = new Date(j.departure)
+	const arr = new Date(j.arrival)
+	return [
+		renderTime(dep), '–', renderTime(arr),
+		'(' + ms(arr - dep) + ')'
+	].join(' ')
 }
 
 const bot = new Bot(TOKEN, {polling: true})
@@ -79,27 +73,34 @@ bot.on('message', (msg) => {
 			bot.sendMessage(user, 'I found ' + stations[0].name)
 			d.to = stations[0].id
 
-			return findVariants(d.from, d.to)
+			return hafas.journeys(d.from, d.to, {
+				results: 10,
+				when: Date.now(),
+				transfers: 0 // todo
+			})
 		})
-		.then((results) => {
-			d.results = results
-			bot.sendMessage(user, 'Which line?')
-			// for (let [variant, line] of results) {
-			for (let i = 0; i < results.length; i++) {
-				bot.sendMessage(user, i + ' – ' + results[i][1].name)
+		.then((journeys) => {
+			d.journeys = journeys
+			bot.sendMessage(user, 'Which journey?')
+			// for (let [variant, line] of journeys) {
+			for (let i = 0; i < journeys.length; i++) {
+				const j = journeys[i]
+				bot.sendMessage(user, i + ' – ' + renderJourney(j))
 			}
 			d.state = 3
 		})
 		.catch((err) => {
+			console.error(err)
 			bot.sendMessage(user, 'Oops!' + (err.message || err))
 		})
 	} else if (d.state === 3) {
-		const result = d.results[parseInt(text)]
-		if (!result) return bot.sendMessage('Oops! No line found.')
+		const journey = d.journeys[parseInt(text)]
+		if (!journey) return bot.sendMessage(user, 'Oops! No journey found. Try again!')
 
-		const [variant, line] = result
-		// bot.sendMessage(user, line.id + ' – ' + line.name)
-
+		const id = journey.parts[0].id // todo: support more than one part
+		d.id = id
 		d.state = 0
+
+		// todo: start watcher
 	}
 })
