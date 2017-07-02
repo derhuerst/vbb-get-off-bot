@@ -6,6 +6,8 @@ const vbb = require('vbb-client')
 const hafas = require('vbb-hafas')
 const timezone = require('moment-timezone')
 const ms = require('ms')
+const createResponder = require('chatbot-coroutine')
+const inMemStorage = require('chatbot-coroutine/in-mem-storage')
 
 const watchers = require('./lib/watchers')
 
@@ -28,6 +30,11 @@ for (let id in allStops) {
 	stationsOf[stop.id] = id
 }
 
+const success = `\
+I will regularly watch for delays to let you know at the right time.
+
+Keep in mind that this bot may still have bugs, so don't rely on it (yet).`
+
 const findArrival = (id, name, station, cb) => () => {
 	return hafas.journeyDetails(id, name)
 	.then((journey) => {
@@ -45,87 +52,99 @@ const findArrival = (id, name, station, cb) => () => {
 	})
 }
 
-const renderTime = (when) => timezone(when).tz(TIMEZONE).format('LT')
+const renderTime = (when) => {
+	return timezone(when).locale(LOCALE).tz(TIMEZONE).format('LT')
+}
+
+const renderRelative = (when) => {
+	const now = Date.now()
+	if (now > when) return ms(now - when) + ' ago'
+	return 'in ' + ms(when - now)
+}
 
 const renderJourney = (j) => {
 	const dep = new Date(j.departure)
 	const arr = new Date(j.arrival)
 	return [
-		renderTime(dep), '–', renderTime(arr),
-		'(' + ms(arr - dep) + ')'
-	].join(' ')
+		renderRelative(dep),
+		ms(arr - dep) + ' travel',
+		renderTime(dep) + ' – ' + renderTime(arr)
+	].join(', ')
+}
+
+const conversation = function* (ctx, user) {
+	let from = yield ctx.read('from')
+	if (!from) {
+		const query = yield ctx.prompt('Hey! Please tell me where you are.')
+		const results = yield vbb.stations({
+			query, results: 1,
+			identifier: 'https://github.com/derhuerst/vbb-get-off-bot'
+		})
+		from = results[0]
+		yield ctx.send('I found ' + from.name)
+		yield ctx.write('from', from)
+	}
+
+	let to = yield ctx.read('to')
+	if (!to) {
+		const query = yield ctx.prompt('Where do you want to go?')
+		const results = yield vbb.stations({
+			query, results: 1,
+			identifier: 'https://github.com/derhuerst/vbb-get-off-bot'
+		})
+		to = results[0]
+		yield ctx.send('I found ' + to.name)
+		yield ctx.write('to', to)
+	}
+
+	let journey = yield ctx.read('journey')
+	if (!journey) {
+		const journeys = yield hafas.journeys(from.id, to.id, {
+			results: 10,
+			when: Date.now(),
+			transfers: 0 // todo
+		})
+
+		for (let i = 0; i < journeys.length; i++) {
+			ctx.send(i + ' – ' + renderJourney(journeys[i]))
+		}
+
+		let input = yield ctx.prompt('Which journey?')
+		journey = journeys[parseInt(input)]
+		while (!journey) {
+			input = yield ctx.prompt('No journey found. Try again!')
+			journey = journeys[parseInt(input)]
+		}
+		yield ctx.write('journey', journey)
+	}
+
+	// todo: support more than one part
+	const id = journey.parts[0].id
+	const name = journey.parts[0].name
+
+	const watcher = findArrival(id, name, to, (timeLeft) => {
+		// what about promises in callbacks?
+		// todo: handle errors
+		if (timeLeft < 0) watchers.stop(user)
+		else ctx.send(`You need to get off in ${ms(timeLeft)}.`)
+	})
+	watchers.start(user, watcher)
+	yield ctx.send(success)
+
+	yield ctx.clear()
 }
 
 const bot = new Bot(TOKEN, {polling: true})
-const data = {}
+bot.on('message', (msg) => respond(msg.chat.id, msg.text))
 
-bot.on('message', (msg) => {
-	const user = msg.chat.id
-	const text = msg.text
-	if (!data[user]) data[user] = {state: 0}
-	const d = data[user]
-
-	if (d.state === 0) {
-		bot.sendMessage(user, 'Hey! Please tell me where you are.')
-		d.state = 1
-	} else if (d.state === 1) {
-		vbb.stations({
-			query: text, results: 1,
-			identifier: 'https://github.com/derhuerst/vbb-get-off-bot'
-		})
-		.then((stations) => {
-			bot.sendMessage(user, 'I found ' + stations[0].name)
-			d.from = stations[0].id
-
-			d.state = 2
-			bot.sendMessage(user, 'Where do you want to go?')
-		})
-		.catch((err) => {
-			bot.sendMessage(user, 'Oops!' + (err.message || err))
-		})
-	} else if (d.state === 2) {
-		vbb.stations({
-			query: text, results: 1,
-			identifier: 'https://github.com/derhuerst/vbb-get-off-bot'
-		})
-		.then((stations) => {
-			bot.sendMessage(user, 'I found ' + stations[0].name)
-			d.to = stations[0].id
-
-			return hafas.journeys(d.from, d.to, {
-				results: 10,
-				when: Date.now(),
-				transfers: 0 // todo
-			})
-		})
-		.then((journeys) => {
-			d.journeys = journeys
-			bot.sendMessage(user, 'Which journey?')
-			// for (let [variant, line] of journeys) {
-			for (let i = 0; i < journeys.length; i++) {
-				const j = journeys[i]
-				bot.sendMessage(user, i + ' – ' + renderJourney(j))
-			}
-			d.state = 3
-		})
-		.catch((err) => {
-			console.error(err)
-			bot.sendMessage(user, 'Oops!' + (err.message || err))
-		})
-	} else if (d.state === 3) {
-		const journey = d.journeys[parseInt(text)]
-		if (!journey) return bot.sendMessage(user, 'Oops! No journey found. Try again!')
-
-		// todo: support more than one part
-		d.id = journey.parts[0].id
-		d.name = journey.parts[0].name // todo: support more than one part
-		d.state = 0
-
-		// todo: start watcher
-		const watcher = findArrival(d.id, d.name, d.to, (timeLeft) => {
-			if (timeLeft < 0) watchers.stop(user)
-			else bot.sendMessage(user, `You need to get off in ${ms(timeLeft)}.`)
-		})
-		watchers.start(user, watcher)
-	}
+const telegram = Object.assign(Object.create(bot), {
+	send: bot.sendMessage.bind(bot)
 })
+
+const onError = (user, err) => {
+	console.error(err)
+	bot.sendMessage(user, 'oops! an error occured.')
+}
+
+// todo: use levelDBStorage
+const respond = createResponder(inMemStorage, telegram, conversation, onError)
