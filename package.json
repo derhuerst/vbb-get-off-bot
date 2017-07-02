@@ -19,6 +19,7 @@
 	},
 	"dependencies": {
 		"chatbot-coroutine": "derhuerst/chatbot-coroutine",
+		"level": "^1.7.0",
 		"moment-timezone": "^0.5.13",
 		"ms": "^2.0.0",
 		"node-telegram-bot-api": "^0.27.1",

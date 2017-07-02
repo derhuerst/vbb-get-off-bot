@@ -7,9 +7,9 @@ const hafas = require('vbb-hafas')
 const timezone = require('moment-timezone')
 const ms = require('ms')
 const createResponder = require('chatbot-coroutine')
-const inMemStorage = require('chatbot-coroutine/in-mem-storage')
 
 const watchers = require('./lib/watchers')
+const storage = require('./lib/storage')
 
 const TOKEN = process.env.TOKEN
 if (!TOKEN) {
@@ -146,5 +146,4 @@ const onError = (user, err) => {
 	bot.sendMessage(user, 'oops! an error occured.')
 }
 
-// todo: use levelDBStorage
-const respond = createResponder(inMemStorage, telegram, conversation, onError)
+const respond = createResponder(storage, telegram, conversation, onError)
