@@ -17,11 +17,8 @@ if (!TOKEN) {
 	process.exit(1)
 }
 
-const TIMEZONE = process.env.TIMEZONE
-if (!TIMEZONE) {
-	console.error('Missing TIMEZONE env var.')
-	process.exit(1)
-}
+const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin'
+const LOCALE = process.env.LOCALE || 'de-DE'
 
 const stationsOf = {}
 for (let id in allStops) {
@@ -36,16 +33,22 @@ I will regularly watch for delays to let you know at the right time.
 Keep in mind that this bot may still have bugs, so don't rely on it (yet).`
 
 const findArrival = (id, name, station, cb) => () => {
-	return hafas.journeyDetails(id, name)
+	return hafas.journeyPart(id, name)
 	.then((journey) => {
 		for (let stopover of journey.passed) {
-			if (stopover.station.id === station) return stopover.arrival
+			const st = stationsOf[stopover.station.id]
+			if (st === station.id) return stopover.arrival
 		}
 		return null
 	})
 	.then((arrival) => {
-		const d = new Date(arrival) - Date.now()
-		if (d < 60 * 1000) cb(d) // todo: make use of delay information
+		if (!arrival) return
+
+		const a = new Date(arrival)
+		if (Number.isNaN(+a)) throw new Error(id + ' invalid arrival date: ' + arrival)
+
+		// todo: make use of delay information
+		cb(a - Date.now())
 	})
 	.catch((err) => {
 		console.error(err)
@@ -122,11 +125,14 @@ const conversation = function* (ctx, user) {
 	const id = journey.parts[0].id
 	const name = journey.parts[0].name
 
+	// todo: handle errors
 	const watcher = findArrival(id, name, to, (timeLeft) => {
-		// what about promises in callbacks?
-		// todo: handle errors
+		console.info(`${id} for ${user}: ${ms(timeLeft)} left.`)
 		if (timeLeft < 0) watchers.stop(user)
-		else ctx.send(`You need to get off in ${ms(timeLeft)}.`)
+
+		if (timeLeft < 60 * 1000) {
+			ctx.send(`You need to get off in ${ms(timeLeft)}.`)
+		}
 	})
 	watchers.start(user, watcher)
 	yield ctx.send(success)
