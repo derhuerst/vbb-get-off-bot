@@ -33,7 +33,7 @@ I will regularly watch for delays to let you know at the right time.
 Keep in mind that this bot may still have bugs, so don't rely on it (yet).`
 
 const findArrival = (id, name, station, cb) => () => {
-	return hafas.journeyPart(id, name)
+	return hafas.journeyLeg(id, name)
 	.then((journey) => {
 		for (let stopover of journey.passed) {
 			const st = stationsOf[stopover.station.id]
@@ -122,8 +122,8 @@ const conversation = function* (ctx, user) {
 	}
 
 	// todo: support more than one part
-	const id = journey.parts[0].id
-	const name = journey.parts[0].name
+	const id = journey.legs[0].id
+	const name = journey.legs[0].line.name
 
 	// todo: handle errors
 	const watcher = findArrival(id, name, to, (timeLeft) => {
