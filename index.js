@@ -2,7 +2,7 @@
 
 const allStops = require('vbb-stations/full.json')
 const Bot = require('node-telegram-bot-api')
-const vbb = require('vbb-client')
+const findStations = require('vbb-stations-autocomplete')
 const hafas = require('vbb-hafas')
 const timezone = require('moment-timezone')
 const ms = require('ms')
@@ -20,7 +20,7 @@ if (!TOKEN) {
 const TIMEZONE = process.env.TIMEZONE || 'Europe/Berlin'
 const LOCALE = process.env.LOCALE || 'de-DE'
 
-const stationsOf = {}
+const stationsOf = Object.create(null)
 for (let id in allStops) {
 	stationsOf[id] = id
 	for (let stop of allStops[id].stops)
@@ -31,6 +31,14 @@ const success = `\
 I will regularly watch for delays to let you know at the right time.
 
 Keep in mind that this bot may still have bugs, so don't rely on it (yet).`
+
+const findStation = (query) => {
+	if (stationsOf[query]) return stationsOf[query]
+	const s = findStations(query, 1, true, false)[0]
+	if (!s || !allStops[s.id]) throw new Error(`unknown station "${query}"`)
+	s.name = allStops[s.id].name
+	return s
+}
 
 const findArrival = (id, name, station, cb) => () => {
 	return hafas.journeyLeg(id, name)
@@ -79,11 +87,7 @@ const conversation = function* (ctx, user) {
 	let from = yield ctx.read('from')
 	if (!from) {
 		const query = yield ctx.prompt('Hey! Please tell me where you are.')
-		const results = yield vbb.stations({
-			query, results: 1,
-			identifier: 'https://github.com/derhuerst/vbb-get-off-bot'
-		})
-		from = results[0]
+		from = findStation(query)
 		yield ctx.send('I found ' + from.name)
 		yield ctx.write('from', from)
 	}
@@ -91,11 +95,7 @@ const conversation = function* (ctx, user) {
 	let to = yield ctx.read('to')
 	if (!to) {
 		const query = yield ctx.prompt('Where do you want to go?')
-		const results = yield vbb.stations({
-			query, results: 1,
-			identifier: 'https://github.com/derhuerst/vbb-get-off-bot'
-		})
-		to = results[0]
+		to = findStation(query)
 		yield ctx.send('I found ' + to.name)
 		yield ctx.write('to', to)
 	}
