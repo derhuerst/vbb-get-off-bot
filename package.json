@@ -1,4 +1,5 @@
 {
+	"private": true,
 	"name": "vbb-get-off-bot",
 	"description": "A Telegram bot that helps you get off your train on time.",
 	"version": "0.1.0",
@@ -26,13 +27,5 @@
 		"vbb-hafas": "^4.2.1",
 		"vbb-stations": "^6.4.1",
 		"vbb-stations-autocomplete": "^3.4.0"
-	},
-	"devDependencies": {
-		"tape": "^4.6.3",
-		"tap-min": "^1.2.1"
-	},
-	"scripts": {
-		"test": "node test.js | tap-min",
-		"prepublishOnly": "npm test"
 	}
 }
