@@ -8,20 +8,35 @@
 [![chat on gitter](https://badges.gitter.im/derhuerst.svg)](https://gitter.im/derhuerst)
 [![support me on Patreon](https://img.shields.io/badge/support%20me-on%20patreon-fa7664.svg)](https://patreon.com/derhuerst)
 
-
 ## Installing
+
+To clone and run this application, you'll need Git and Node.js (which comes with npm) installed on your computer. From your command line:
+
+### Clone this repository
+
+$ git clone https://github.com/derhuerst/vbb-get-off-bot.git
+
+### Go into the repository
+
+$ cd vbb-get-off-bot
+
+### Install dependencies
+
+$ npm install
+
+### Run the app
+
+$ npm start
 
 ```shell
 todo
 ```
 
-
 ## Usage
 
 ```js
-todo
+todo;
 ```
-
 
 ## Contributing
 
