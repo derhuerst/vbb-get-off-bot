@@ -19,7 +19,7 @@ todo
 ## Usage
 
 ```js
-todo
+Vbb get off bot is a tool that can be used to help remind you when to get off of the sub way. It does this by "..." and "..." 
 ```
 
 
