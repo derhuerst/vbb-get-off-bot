@@ -3,13 +3,15 @@
 const allStops = require('vbb-stations/full.json')
 const Bot = require('node-telegram-bot-api')
 const findStations = require('vbb-stations-autocomplete')
-const hafas = require('vbb-hafas')
+const createHafas = require('vbb-hafas')
 const timezone = require('moment-timezone')
 const ms = require('ms')
 const createResponder = require('chatbot-coroutine')
 
 const watchers = require('./lib/watchers')
 const storage = require('./lib/storage')
+
+const hafas = createHafas('vbb-get-off-bot')
 
 const TOKEN = process.env.TOKEN
 if (!TOKEN) {
@@ -41,10 +43,10 @@ const findStation = (query) => {
 }
 
 const findArrival = (id, name, station, cb) => () => {
-	return hafas.journeyLeg(id, name)
+	return hafas.trip(id, name)
 	.then((journey) => {
-		for (let stopover of journey.passed) {
-			const st = stationsOf[stopover.station.id]
+		for (let stopover of journey.stopovers) {
+			const st = stationsOf[stopover.stop.id]
 			if (st === station.id) return stopover.arrival
 		}
 		return null
@@ -74,8 +76,8 @@ const renderRelative = (when) => {
 }
 
 const renderJourney = (j) => {
-	const dep = new Date(j.departure)
-	const arr = new Date(j.arrival)
+	const dep = new Date(j.legs[0].departure)
+	const arr = new Date(j.legs[0].arrival)
 	return [
 		renderRelative(dep),
 		ms(arr - dep) + ' travel',
@@ -104,7 +106,7 @@ const conversation = function* (ctx, user) {
 	if (!journey) {
 		const journeys = yield hafas.journeys(from.id, to.id, {
 			results: 10,
-			when: Date.now(),
+			departure: Date.now(),
 			transfers: 0 // todo
 		})
 
