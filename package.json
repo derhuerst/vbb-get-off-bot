@@ -23,7 +23,7 @@
 		"level": "^3.0.1",
 		"moment-timezone": "^0.5.13",
 		"ms": "^2.0.0",
-		"node-telegram-bot-api": "^0.30.0",
+		"node-telegram-bot-api": "^0.53.0",
 		"vbb-hafas": "^5.0.1",
 		"vbb-stations": "^6.4.1",
 		"vbb-stations-autocomplete": "^3.4.0"
